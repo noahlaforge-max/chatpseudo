@@ -89,7 +89,8 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
 </div>
 
 <script>
-const ws = new WebSocket(`ws://${window.location.host}`);
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${protocol}//${window.location.host}`);
 let myPseudo = "";
 let currentAdminCode = "";
 let pc, localStream;
