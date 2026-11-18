@@ -40,10 +40,12 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
 
 <div class="login-box" id="loginBox">
     <h2>Connexion Messagerie</h2>
-    <p style="font-size:12px;color:#00a884">🟢 Connexion universelle prête</p>
-    <input type="text" id="loginPseudo" placeholder="Votre Pseudo">
-    <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)">
-    <button id="btnLogin" onclick="login()">Se connecter</button>
+    <p id="jsCheck" style="font-size:12px;color:#eab308">Chargement du script...</p>
+    <form id="loginForm">
+        <input type="text" id="loginPseudo" placeholder="Votre Pseudo" required>
+        <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)" required>
+        <button type="submit" id="btnLogin">Se connecter</button>
+    </form>
     <p id="loginErr" style="color:#ea0038;font-size:13px;margin-top:10px"></p>
 </div>
 
@@ -51,32 +53,32 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
     <div class="header">
         <div><strong id="myDisplayPseudo"></strong></div>
         <div class="call-btns">
-            <button onclick="startCall(false)">📞 Audio</button>
-            <button onclick="startCall(true)">📹 Visio</button>
-            <button class="quit-btn" onclick="quitChat()">Quitter</button>
+            <button type="button" onclick="startCall(false)">📞 Audio</button>
+            <button type="button" onclick="startCall(true)">📹 Visio</button>
+            <button type="button" class="quit-btn" onclick="quitChat()">Quitter</button>
         </div>
     </div>
 
     <div class="video-zone hidden" id="videoZone">
         <video id="localVideo" autoplay muted playsinline></video>
         <video id="remoteVideo" autoplay playsinline></video>
-        <button class="end-call" onclick="endCall()">Raccrocher</button>
+        <button type="button" class="end-call" onclick="endCall()">Raccrocher</button>
     </div>
 
     <div class="messages" id="messages"></div>
 
     <div class="input-area">
         <input type="file" id="mediaInput" accept="image/*,video/*" class="hidden" onchange="sendMedia()">
-        <button class="icon-btn" onclick="document.getElementById('mediaInput').click()" title="Envoyer photo/vidéo">📎</button>
+        <button type="button" class="icon-btn" onclick="document.getElementById('mediaInput').click()" title="Envoyer photo/vidéo">📎</button>
         <input type="text" id="msgInput" placeholder="Écrire un message (ou /admin)..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">Envoyer</button>
+        <button type="button" class="send-btn" onclick="sendMessage()">Envoyer</button>
     </div>
 </div>
 
 <div class="admin-modal hidden" id="adminPanel">
     <div style="display:flex;justify-content:space-between;margin-bottom:10px">
         <strong>[CONSOLE ADMINISTRATEUR - ARCHIVES]</strong>
-        <button class="admin-btn" onclick="document.getElementById('adminPanel').classList.add('hidden')">Fermer</button>
+        <button type="button" class="admin-btn" onclick="document.getElementById('adminPanel').classList.add('hidden')">Fermer</button>
     </div>
     <div class="admin-section">
         <h3>UTILISATEURS & ADRESSES IP</h3>
@@ -89,6 +91,9 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
 </div>
 
 <script>
+document.getElementById('jsCheck').innerText = "🟢 Système prêt";
+document.getElementById('jsCheck').style.color = "#00a884";
+
 let myPseudo = "";
 let lastEventId = 0;
 let currentAdminCode = "";
@@ -104,17 +109,14 @@ async function apiCall(payload) {
     return await res.json();
 }
 
-async function login() {
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
     const errBox = document.getElementById('loginErr');
     const btn = document.getElementById('btnLogin');
     errBox.innerText = "";
 
     const pseudo = document.getElementById('loginPseudo').value.trim();
     const code = document.getElementById('loginCode').value.trim();
-    if (!pseudo || !code) {
-        errBox.innerText = "Veuillez remplir le pseudo et le code.";
-        return;
-    }
 
     try {
         btn.innerText = "Connexion en cours...";
@@ -134,11 +136,11 @@ async function login() {
         document.getElementById('chatApp').classList.remove('hidden');
 
         setInterval(syncLoop, 1500);
-    } catch (e) {
+    } catch (err) {
         btn.innerText = "Se connecter";
-        errBox.innerText = "Erreur réseau : " + e.message;
+        errBox.innerText = "Erreur : " + err.message;
     }
-}
+});
 
 async function syncLoop() {
     if (!myPseudo) return;
@@ -221,10 +223,9 @@ function renderMessage(m) {
     const div = document.createElement('div');
     div.className = 'msg ' + (m.author === myPseudo ? 'me' : 'other');
     let body = "";
-    if (m.msgType === 'text') body = `<div>${m.content}</div>`;
-    if (m.msgType === 'image') body = `<img src="${m.content}">`;
-    if (m.msgType === 'video') body = `<video src="${m.content}" controls></video>`;
-
+if (m.msgType === 'text') body = <div>${m.content}</div>;
+if (m.msgType === 'image') body = <img src="${m.content}">;
+if (m.msgType === 'video') body = <video src="${m.content}" controls></video>;
 div.innerHTML = <div class="msg-author">${m.author}</div>${body}<div class="msg-time">${m.time}</div>;
 box.appendChild(div);
 box.scrollTop = box.scrollHeight;
@@ -273,7 +274,7 @@ document.getElementById('adminPanel').classList.remove('hidden');
 const uList = document.getElementById('adminUsersList');
 uList.innerHTML = '';
 for (let [pseudo, info] of Object.entries(data.users)) {
-uList.innerHTML +=  <div class="user-row"> <span><strong>${pseudo}</strong> | IP: ${info.ip} | Code: ${info.code} ${info.banned ? '[BANNI]' : ''}</span> <div> <button class="admin-btn" onclick="adminRename('${pseudo}')">Renommer</button> <button class="admin-btn" style="background:#f55;color:#fff" onclick="adminBan('${pseudo}')">${info.banned ? 'Débannir' : 'Bannir'}</button> </div> </div>;
+uList.innerHTML +=  <div class="user-row"> <span><strong>${pseudo}</strong> | IP: ${info.ip} | Code: ${info.code} ${info.banned ? '[BANNI]' : ''}</span> <div> <button type="button" class="admin-btn" onclick="adminRename('${pseudo}')">Renommer</button> <button type="button" class="admin-btn" style="background:#f55;color:#fff" onclick="adminBan('${pseudo}')">${info.banned ? 'Débannir' : 'Bannir'}</button> </div> </div>;
 }
 const hList = document.getElementById('adminHistoryList');
 hList.innerText = data.history.map(m => [${m.time}] ${m.author} (${m.ip}) : ${m.msgType === 'text' ? m.content : '[' + m.msgType.toUpperCase() + ']'}).join('\n') || "Aucun historique.";
