@@ -40,7 +40,7 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
 
 <div class="login-box" id="loginBox">
     <h2>Connexion Messagerie</h2>
-    <p style="font-size:12px;color:#8696a0">Les messages disparaissent dès que vous quittez.</p>
+    <p id="serverStatus" style="font-size:12px;color:#eab308">🟡 Réveil du serveur en cours...</p>
     <input type="text" id="loginPseudo" placeholder="Votre Pseudo">
     <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)">
     <button onclick="login()">Se connecter</button>
@@ -95,6 +95,18 @@ let myPseudo = "";
 let currentAdminCode = "";
 let pc, localStream;
 
+ws.onopen = () => {
+    const st = document.getElementById('serverStatus');
+    st.innerText = "🟢 Serveur prêt !";
+    st.style.color = "#00a884";
+};
+
+ws.onclose = () => {
+    const st = document.getElementById('serverStatus');
+    st.innerText = "🔴 Déconnecté (Actualisez la page)";
+    st.style.color = "#ea0038";
+};
+
 ws.onmessage = async (e) => {
     const data = JSON.parse(e.data);
 
@@ -104,7 +116,7 @@ ws.onmessage = async (e) => {
     if (data.type === 'login_success') {
         myPseudo = data.pseudo;
         document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
-        document.getElementById('messages').innerHTML = ''; // Écran vide à l'arrivée
+        document.getElementById('messages').innerHTML = '';
         document.getElementById('loginBox').classList.add('hidden');
         document.getElementById('chatApp').classList.remove('hidden');
     }
@@ -145,6 +157,9 @@ ws.onmessage = async (e) => {
 };
 
 function login() {
+    if (ws.readyState !== WebSocket.OPEN) {
+        return alert("Le serveur est encore en train de démarrer, patientez quelques secondes ou actualisez la page.");
+    }
     const pseudo = document.getElementById('loginPseudo').value.trim();
     const code = document.getElementById('loginCode').value.trim();
     if (!pseudo || !code) return alert("Remplissez tous les champs.");
@@ -152,8 +167,8 @@ function login() {
 }
 
 function quitChat() {
-    document.getElementById('messages').innerHTML = ''; // Efface l'affichage local
-    location.reload(); // Déconnecte et renvoie à l'écran de connexion
+    document.getElementById('messages').innerHTML = '';
+    location.reload();
 }
 
 function sendMessage() {
@@ -176,7 +191,7 @@ function sendMessage() {
 }
 
 function sendMedia() {
-    const file = document.getElementById('mediaInput').files[0];
+    const file = document.getElementById('mediaInput').files;
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -200,49 +215,220 @@ function renderMessage(m) {
     if (m.msgType === 'video') body = `<video src="${m.content}" controls></video>`;
 
     div.innerHTML = `<div class="msg-author">${m.author}</div>${body}<div class="msg-time">${m.time}</div>`;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messagerie Éphémère</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui,sans-serif}
+body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:center;height:100vh}
+.hidden{display:none!important}
+.login-box{margin:auto;background:#202c33;padding:30px;border-radius:12px;width:320px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.4)}
+.login-box input{width:100%;padding:12px;margin:8px 0;border:none;border-radius:6px;background:#2a3942;color:#fff}
+.login-box button{width:100%;padding:12px;margin-top:10px;background:#00a884;color:#111b21;font-weight:bold;border:none;border-radius:6px;cursor:pointer}
+.app{width:100%;max-width:800px;display:flex;flex-direction:column;background:#0b141a;height:100vh}
+.header{background:#202c33;padding:12px 15px;display:flex;justify-content:space-between;align-items:center}
+.call-btns button{background:#00a884;color:#111b21;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;margin-left:5px}
+.call-btns button.quit-btn{background:#ea0038;color:#fff}
+.video-zone{background:#000;display:flex;justify-content:center;gap:10px;padding:10px;position:relative}
+.video-zone video{width:48%;max-height:220px;border-radius:8px;background:#222}
+.end-call{position:absolute;bottom:15px;background:#ea0038;color:#fff;border:none;padding:8px 16px;border-radius:20px;cursor:pointer;font-weight:bold}
+.messages{flex:1;padding:15px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:75%;padding:8px 12px;border-radius:8px;font-size:14px}
+.msg-author{font-size:11px;font-weight:bold;color:#00a884;margin-bottom:3px}
+.msg-time{font-size:10px;color:#8696a0;text-align:right;margin-top:4px}
+.me{align-self:flex-end;background:#005c4b}
+.other{align-self:flex-start;background:#202c33}
+.sys{align-self:center;background:#182229;color:#8696a0;font-size:12px;padding:4px 12px;border-radius:12px}
+.msg img,.msg video{max-width:100%;border-radius:6px;margin-top:4px}
+.input-area{background:#202c33;padding:10px;display:flex;align-items:center;gap:8px}
+.input-area input[type="text"]{flex:1;padding:10px 15px;border:none;border-radius:20px;background:#2a3942;color:#fff;outline:none}
+.icon-btn{background:#2a3942;color:#aebac1;border:none;padding:10px;border-radius:50%;cursor:pointer;font-size:16px}
+.send-btn{background:#00a884;color:#111b21;border:none;padding:10px 18px;border-radius:20px;font-weight:bold;cursor:pointer}
+.admin-modal{position:fixed;inset:0;background:rgba(0,0,0,0.95);color:#0f0;font-family:monospace;padding:20px;display:flex;flex-direction:column;z-index:200;overflow-y:auto}
+.admin-section{border:1px solid #0f0;padding:10px;margin-bottom:15px}
+.user-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #030}
+.admin-btn{background:#0f0;color:#000;border:none;padding:4px 8px;cursor:pointer;font-weight:bold;margin-left:5px}
+</style>
+</head>
+<body>
+
+<div class="login-box" id="loginBox">
+    <h2>Connexion Messagerie</h2>
+    <p id="serverStatus" style="font-size:12px;color:#eab308">🟡 Réveil du serveur en cours...</p>
+    <input type="text" id="loginPseudo" placeholder="Votre Pseudo">
+    <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)">
+    <button onclick="login()">Se connecter</button>
+    <p id="loginErr" style="color:#ea0038;font-size:13px"></p>
+</div>
+
+<div class="app hidden" id="chatApp">
+    <div class="header">
+        <div><strong id="myDisplayPseudo"></strong></div>
+        <div class="call-btns">
+            <button onclick="startCall(false)">📞 Audio</button>
+            <button onclick="startCall(true)">📹 Visio</button>
+            <button class="quit-btn" onclick="quitChat()">Quitter</button>
+        </div>
+    </div>
+
+    <div class="video-zone hidden" id="videoZone">
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+        <button class="end-call" onclick="endCall()">Raccrocher</button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input-area">
+        <input type="file" id="mediaInput" accept="image/*,video/*" class="hidden" onchange="sendMedia()">
+        <button class="icon-btn" onclick="document.getElementById('mediaInput').click()" title="Envoyer photo/vidéo">📎</button>
+        <input type="text" id="msgInput" placeholder="Écrire un message (ou /admin)..." onkeypress="if(event.key==='Enter')sendMessage()">
+        <button class="send-btn" onclick="sendMessage()">Envoyer</button>
+    </div>
+</div>
+
+<div class="admin-modal hidden" id="adminPanel">
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <strong>[CONSOLE ADMINISTRATEUR - ARCHIVES]</strong>
+        <button class="admin-btn" onclick="document.getElementById('adminPanel').classList.add('hidden')">Fermer</button>
+    </div>
+    <div class="admin-section">
+        <h3>UTILISATEURS & ADRESSES IP</h3>
+        <div id="adminUsersList"></div>
+    </div>
+    <div class="admin-section" style="flex:1;overflow-y:auto">
+        <h3>HISTORIQUE COMPLET (CONSERVÉ)</h3>
+        <div id="adminHistoryList" style="white-space:pre-wrap;font-size:12px"></div>
+    </div>
+</div>
+
+<script>
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${protocol}//${window.location.host}`);
+let myPseudo = "";
+let currentAdminCode = "";
+let pc, localStream;
+
+ws.onopen = () => {
+    const st = document.getElementById('serverStatus');
+    st.innerText = "🟢 Serveur prêt !";
+    st.style.color = "#00a884";
+};
+
+ws.onclose = () => {
+    const st = document.getElementById('serverStatus');
+    st.innerText = "🔴 Déconnecté (Actualisez la page)";
+    st.style.color = "#ea0038";
+};
+
+ws.onmessage = async (e) => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === 'login_error') {
+        document.getElementById('loginErr').innerText = data.msg;
+    }
+    if (data.type === 'login_success') {
+        myPseudo = data.pseudo;
+        document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('loginBox').classList.add('hidden');
+        document.getElementById('chatApp').classList.remove('hidden');
+    }
+    if (data.type === 'new_message') {
+        renderMessage(data.message);
+    }
+    if (data.type === 'system') {
+        const div = document.createElement('div');
+        div.className = 'sys';
+        div.innerText = data.text;
+        document.getElementById('messages').appendChild(div);
+    }
+    if (data.type === 'renamed') {
+        myPseudo = data.newName;
+        document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
+        alert("L'administrateur a modifié votre pseudo en : " + myPseudo);
+    }
+    if (data.type === 'admin_error') alert(data.msg);
+    if (data.type === 'admin_data') renderAdmin(data);
+
+    if (data.type === 'webrtc') {
+        if (data.offer) {
+            if (confirm(`Appel entrant de ${data.from}. Accepter ?`)) {
+                await setupMedia(data.isVideo);
+                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                ws.send(JSON.stringify({ type: 'webrtc', answer: answer }));
+            }
+        } else if (data.answer && pc) {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        } else if (data.candidate && pc) {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } else if (data.hangup) {
+            endCall(true);
+        }
+    }
+};
+
+function login() {
+    if (ws.readyState !== WebSocket.OPEN) {
+        return alert("Le serveur est encore en train de démarrer, patientez quelques secondes ou actualisez la page.");
+    }
+    const pseudo = document.getElementById('loginPseudo').value.trim();
+    const code = document.getElementById('loginCode').value.trim();
+    if (!pseudo || !code) return alert("Remplissez tous les champs.");
+    ws.send(JSON.stringify({ type: 'login', pseudo: pseudo, code: code }));
 }
 
-async function setupMedia(isVideo) {
-    document.getElementById('videoZone').classList.remove('hidden');
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
-    document.getElementById('localVideo').srcObject = localStream;
+function quitChat() {
+    document.getElementById('messages').innerHTML = '';
+    location.reload();
+}
 
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:://google.com' }] });
-localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-pc.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
-pc.onicecandidate = e => { if (e.candidate) ws.send(JSON.stringify({ type: 'webrtc', candidate: e.candidate })); };
+function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (text === '/admin') {
+        input.value = '';
+        const code = prompt("Entrez le code Administrateur :");
+        if (code) {
+            currentAdminCode = code;
+            ws.send(JSON.stringify({ type: 'admin_auth', code: code }));
+        }
+        return;
+    }
+
+    ws.send(JSON.stringify({ type: 'message', msgType: 'text', content: text }));
+    input.value = '';
 }
-async function startCall(isVideo) {
-await setupMedia(isVideo);
-const offer = await pc.createOffer();
-await pc.setLocalDescription(offer);
-ws.send(JSON.stringify({ type: 'webrtc', offer: offer, isVideo: isVideo }));
+
+function sendMedia() {
+    const file = document.getElementById('mediaInput').files;
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const isVideo = file.type.startsWith('video');
+        ws.send(JSON.stringify({
+            type: 'message',
+            msgType: isVideo ? 'video' : 'image',
+            content: reader.result
+        }));
+    };
+    reader.readAsDataURL(file);
 }
-function endCall(remote = false) {
-if (localStream) localStream.getTracks().forEach(t => t.stop());
-if (pc) pc.close();
-pc = null;
-document.getElementById('videoZone').classList.add('hidden');
-if (!remote) ws.send(JSON.stringify({ type: 'webrtc', hangup: true }));
-}
-function renderAdmin(data) {
-document.getElementById('adminPanel').classList.remove('hidden');
-const uList = document.getElementById('adminUsersList');
-uList.innerHTML = '';
-for (let [pseudo, info] of Object.entries(data.users)) {
-uList.innerHTML +=  <div class="user-row"> <span><strong>${pseudo}</strong> | IP: ${info.ip} | Code: ${info.code} ${info.banned ? '[BANNI]' : ''}</span> <div> <button class="admin-btn" onclick="adminRename('${pseudo}')">Renommer</button> <button class="admin-btn" style="background:#f55;color:#fff" onclick="adminBan('${pseudo}')">${info.banned ? 'Débannir' : 'Bannir'}</button> </div> </div>;
-}
-const hList = document.getElementById('adminHistoryList');
-hList.innerText = data.history.map(m => [${m.time}] ${m.author} (${m.ip}) : ${m.msgType === 'text' ? m.content : '[' + m.msgType.toUpperCase() + ']'}).join('\n') || "Aucun historique.";
-}
-function adminRename(oldName) {
-const newName = prompt("Nouveau pseudo pour " + oldName + " :");
-if (newName && newName.trim()) {
-ws.send(JSON.stringify({ type: 'admin_action', code: currentAdminCode, action: 'rename', oldName: oldName, newName: newName.trim() }));
-}
-}
-function adminBan(target) {
-ws.send(JSON.stringify({ type: 'admin_action', code: currentAdminCode, action: 'ban', target: target }));
-}
+
+function renderMessage(m) {
+    const box = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg ' + (m.author === myPseudo ? 'me' : 'other');
+    let body = "";
+    if (m.msgType === 'text') body = `<div>${m.content}</div>`;
+    if (m.msgType === 'image') body = `<img src="${m.content}">`;
+    if (m.msgType === 'video') body = `<video src="${m.content}" controls></video>`;
+
+    div.innerHTML = `<div class="msg-author">${m.author}</div>${body}<div class="msg-time">${m.time}</div>`;
