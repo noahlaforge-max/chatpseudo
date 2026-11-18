@@ -1,0 +1,11 @@
+{
+  "name": "messagerie-complete",
+  "version": "1.0.0",
+  "main": "serveur.js",
+  "scripts": {
+    "start": "node serveur.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
