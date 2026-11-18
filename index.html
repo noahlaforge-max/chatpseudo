@@ -9,8 +9,13 @@
 body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:center;height:100vh}
 .hidden{display:none!important}
 .login-box{margin:auto;background:#202c33;padding:30px;border-radius:12px;width:320px;text-align:center;box-shadow:0 4px 15px rgba(0,0,0,0.4)}
-.login-box input{width:100%;padding:12px;margin:8px 0;border:none;border-radius:6px;background:#2a3942;color:#fff}
-.login-box button{width:100%;padding:12px;margin-top:10px;background:#00a884;color:#111b21;font-weight:bold;border:none;border-radius:6px;cursor:pointer}
+.login-box input{width:100%;padding:12px;margin:8px 0;border:none;border-radius:6px;background:#2a3942;color:#fff;outline:none}
+.login-box input:focus{box-shadow:0 0 0 2px #00a884}
+/* Style du bouton : grisé par défaut, vert lumineux quand actif */
+.login-box button{width:100%;padding:12px;margin-top:10px;background:#2a3942;color:#8696a0;font-weight:bold;border:none;border-radius:6px;cursor:not-allowed;transition:all 0.25s ease}
+.login-box button.ready{background:#00e676;color:#0b141a;cursor:pointer;box-shadow:0 0 12px rgba(0,230,118,0.4)}
+.login-box button.ready:hover{background:#33eb91}
+
 .app{width:100%;max-width:800px;display:flex;flex-direction:column;background:#0b141a;height:100vh}
 .header{background:#202c33;padding:12px 15px;display:flex;justify-content:space-between;align-items:center}
 .call-btns button{background:#00a884;color:#111b21;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;margin-left:5px}
@@ -42,9 +47,9 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
     <h2>Connexion Messagerie</h2>
     <p id="jsCheck" style="font-size:12px;color:#eab308">Chargement du script...</p>
     <form id="loginForm">
-        <input type="text" id="loginPseudo" placeholder="Votre Pseudo" required>
-        <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)" required>
-        <button type="submit" id="btnLogin">Se connecter</button>
+        <input type="text" id="loginPseudo" placeholder="Votre Pseudo" oninput="checkInputs()" required>
+        <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)" oninput="checkInputs()" required>
+        <button type="submit" id="btnLogin" disabled>Se connecter</button>
     </form>
     <p id="loginErr" style="color:#ea0038;font-size:13px;margin-top:10px"></p>
 </div>
@@ -98,6 +103,20 @@ let myPseudo = "";
 let lastEventId = 0;
 let currentAdminCode = "";
 let pc, localStream;
+
+// Éclaircit le bouton dès que les deux champs sont remplis
+function checkInputs() {
+    const p = document.getElementById('loginPseudo').value.trim();
+    const c = document.getElementById('loginCode').value.trim();
+    const btn = document.getElementById('btnLogin');
+    if (p.length > 0 && c.length > 0) {
+        btn.classList.add('ready');
+        btn.disabled = false;
+    } else {
+        btn.classList.remove('ready');
+        btn.disabled = true;
+    }
+}
 
 async function apiCall(payload) {
     const res = await fetch('/api', {
@@ -192,37 +211,33 @@ async function sendMessage() {
             const res = await apiCall({ type: 'admin_auth', code: code });
             if (res.ok) renderAdmin(res);
             else alert(res.msg);
-        }
-        return;
-    }
-
-    input.value = '';
-    await apiCall({ type: 'message', author: myPseudo, msgType: 'text', content: text });
-    syncLoop();
+        }return;
 }
-
+input.value = '';
+await apiCall({ type: 'message', author: myPseudo, msgType: 'text', content: text });
+syncLoop();
+}
 function sendMedia() {
-    const file = document.getElementById('mediaInput').files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-        const isVideo = file.type.startsWith('video');
-        await apiCall({
-            type: 'message',
-            author: myPseudo,
-            msgType: isVideo ? 'video' : 'image',
-            content: reader.result
-        });
-        syncLoop();
-    };
-    reader.readAsDataURL(file);
+const file = document.getElementById('mediaInput').files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = async () => {
+const isVideo = file.type.startsWith('video');
+await apiCall({
+type: 'message',
+author: myPseudo,
+msgType: isVideo ? 'video' : 'image',
+content: reader.result
+});
+syncLoop();
+};
+reader.readAsDataURL(file);
 }
-
 function renderMessage(m) {
-    const box = document.getElementById('messages');
-    const div = document.createElement('div');
-    div.className = 'msg ' + (m.author === myPseudo ? 'me' : 'other');
-    let body = "";
+const box = document.getElementById('messages');
+const div = document.createElement('div');
+div.className = 'msg ' + (m.author === myPseudo ? 'me' : 'other');
+let body = "";
 if (m.msgType === 'text') body = <div>${m.content}</div>;
 if (m.msgType === 'image') body = <img src="${m.content}">;
 if (m.msgType === 'video') body = <video src="${m.content}" controls></video>;
