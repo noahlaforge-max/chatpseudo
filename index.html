@@ -43,8 +43,8 @@ body{margin:0;background:#111b21;color:#e9edef;display:flex;justify-content:cent
     <p style="font-size:12px;color:#00a884">🟢 Connexion universelle prête</p>
     <input type="text" id="loginPseudo" placeholder="Votre Pseudo">
     <input type="password" id="loginCode" placeholder="Code secret (ex: 1234)">
-    <button onclick="login()">Se connecter</button>
-    <p id="loginErr" style="color:#ea0038;font-size:13px"></p>
+    <button id="btnLogin" onclick="login()">Se connecter</button>
+    <p id="loginErr" style="color:#ea0038;font-size:13px;margin-top:10px"></p>
 </div>
 
 <div class="app hidden" id="chatApp">
@@ -100,58 +100,76 @@ async function apiCall(payload) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
+    if (!res.ok) throw new Error("Erreur serveur HTTP " + res.status);
     return await res.json();
 }
 
 async function login() {
+    const errBox = document.getElementById('loginErr');
+    const btn = document.getElementById('btnLogin');
+    errBox.innerText = "";
+
     const pseudo = document.getElementById('loginPseudo').value.trim();
     const code = document.getElementById('loginCode').value.trim();
-    if (!pseudo || !code) return alert("Remplissez tous les champs.");
-
-    const res = await apiCall({ type: 'login', pseudo: pseudo, code: code });
-    if (!res.ok) {
-        document.getElementById('loginErr').innerText = res.msg;
+    if (!pseudo || !code) {
+        errBox.innerText = "Veuillez remplir le pseudo et le code.";
         return;
     }
 
-    myPseudo = res.pseudo;
-    lastEventId = res.lastEventId;
-    document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
-    document.getElementById('messages').innerHTML = '';
-    document.getElementById('loginBox').classList.add('hidden');
-    document.getElementById('chatApp').classList.remove('hidden');
+    try {
+        btn.innerText = "Connexion en cours...";
+        const res = await apiCall({ type: 'login', pseudo: pseudo, code: code });
+        btn.innerText = "Se connecter";
 
-    setInterval(syncLoop, 1500);
+        if (!res.ok) {
+            errBox.innerText = res.msg || "Erreur de connexion.";
+            return;
+        }
+
+        myPseudo = res.pseudo;
+        lastEventId = res.lastEventId;
+        document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
+        document.getElementById('messages').innerHTML = '';
+        document.getElementById('loginBox').classList.add('hidden');
+        document.getElementById('chatApp').classList.remove('hidden');
+
+        setInterval(syncLoop, 1500);
+    } catch (e) {
+        btn.innerText = "Se connecter";
+        errBox.innerText = "Erreur réseau : " + e.message;
+    }
 }
 
 async function syncLoop() {
     if (!myPseudo) return;
-    const res = await apiCall({ type: 'sync', pseudo: myPseudo, sinceId: lastEventId });
-    if (res.banned) {
-        alert("Vous avez été banni par l'administrateur.");
-        quitChat();
-        return;
-    }
-    if (!res.events) return;
+    try {
+        const res = await apiCall({ type: 'sync', pseudo: myPseudo, sinceId: lastEventId });
+        if (res.banned) {
+            alert("Vous avez été banni par l'administrateur.");
+            quitChat();
+            return;
+        }
+        if (!res.events) return;
 
-    for (const ev of res.events) {
-        lastEventId = Math.max(lastEventId, ev.id);
-        if (ev.kind === 'message') renderMessage(ev);
-        if (ev.kind === 'system') {
-            const div = document.createElement('div');
-            div.className = 'sys';
-            div.innerText = ev.text;
-            document.getElementById('messages').appendChild(div);
+        for (const ev of res.events) {
+            lastEventId = Math.max(lastEventId, ev.id);
+            if (ev.kind === 'message') renderMessage(ev);
+            if (ev.kind === 'system') {
+                const div = document.createElement('div');
+                div.className = 'sys';
+                div.innerText = ev.text;
+                document.getElementById('messages').appendChild(div);
+            }
+            if (ev.kind === 'rename' && ev.oldName === myPseudo) {
+                myPseudo = ev.newName;
+                document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
+                alert("L'administrateur a changé votre pseudo en : " + myPseudo);
+            }
+            if (ev.kind === 'webrtc' && ev.from !== myPseudo) {
+                handleWebRTC(ev);
+            }
         }
-        if (ev.kind === 'rename' && ev.oldName === myPseudo) {
-            myPseudo = ev.newName;
-            document.getElementById('myDisplayPseudo').innerText = "Connecté : " + myPseudo;
-            alert("L'administrateur a changé votre pseudo en : " + myPseudo);
-        }
-        if (ev.kind === 'webrtc' && ev.from !== myPseudo) {
-            handleWebRTC(ev);
-        }
-    }
+    } catch (e) {}
 }
 
 function quitChat() {
@@ -207,19 +225,17 @@ function renderMessage(m) {
     if (m.msgType === 'image') body = `<img src="${m.content}">`;
     if (m.msgType === 'video') body = `<video src="${m.content}" controls></video>`;
 
-    div.innerHTML = `<div class="msg-author">${m.author}</div>${body}<div class="msg-time">${m.time}</div>`;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
+div.innerHTML = <div class="msg-author">${m.author}</div>${body}<div class="msg-time">${m.time}</div>;
+box.appendChild(div);
+box.scrollTop = box.scrollHeight;
 }
-
 async function setupMedia(isVideo) {
-    document.getElementById('videoZone').classList.remove('hidden');
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
-    document.getElementById('localVideo').srcObject = localStream;
-
-    pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:://google.com' }] });
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-    pc.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
+document.getElementById('videoZone').classList.remove('hidden');
+localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
+document.getElementById('localVideo').srcObject = localStream;
+pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:google.com' }] });
+localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+pc.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
 pc.onicecandidate = e => { if (e.candidate) apiCall({ type: 'webrtc', from: myPseudo, candidate: e.candidate }); };
 }
 async function startCall(isVideo) {
